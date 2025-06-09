@@ -445,10 +445,18 @@ add chain=srcnat src-address=192.168.100.0/24 action=masquerade comment="NAT VPN
 /ip firewall filter
 add chain=input connection-state=established,related action=accept
 add chain=input connection-state=invalid action=drop
-add chain=input protocol=icmp src-address=192.168.1.0/24 action=accept comment="Allow ping from Cabang-1"
-add chain=input protocol=icmp src-address=192.168.2.0/24 action=accept comment="Allow ping from Cabang-2"
-add chain=input protocol=icmp src-address=4.4.4.0/24 action=drop comment="Block ping from Public"
-add chain=input protocol=icmp action=drop comment="Block other ping"
+
+# Gunakan address-list untuk manajemen yang lebih mudah
+/ip firewall address-list
+add list=allowed-ping address=1.1.1.11 comment="R-Cabang-1"
+add list=allowed-ping address=2.2.2.12 comment="R-Cabang-2"
+add list=allowed-ping address=192.168.1.0/24 comment="LAN Cabang-1"
+add list=allowed-ping address=192.168.2.0/24 comment="LAN Cabang-2"
+
+# Aturan firewall yang disederhanakan
+/ip firewall filter
+add chain=input protocol=icmp src-address-list=allowed-ping action=accept comment="Allow ping from trusted sources"
+add chain=input protocol=icmp action=drop comment="Block all other ping"
 add chain=forward protocol=icmp action=accept comment="Allow ICMP in forward chain"
 add chain=input protocol=ospf action=accept comment="Allow OSPF"
 add chain=forward protocol=ospf action=accept comment="Allow OSPF in forward chain"
