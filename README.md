@@ -37,7 +37,7 @@
 | | ETH1 | 192.168.1.11/24 | LAN Cabang-1 (Gateway) |
 | R-Cabang-2 | ETH0 | 2.2.2.12/24 | Ke R2 |
 | | ETH1 | 192.168.2.12/24 | LAN Cabang-2 (Gateway) |
-| R-Pusat | ETH0 | 3.3.12.13/24 | Public IP |
+| R-Pusat | ETH0 | 3.3.12.13/24 | Link ke R3 |
 | | ETH1 | 192.168.12.13/24 | LAN Pusat (Gateway) |
 
 **Static IP Devices:**
