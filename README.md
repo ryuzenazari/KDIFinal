@@ -66,6 +66,16 @@ add area=backbone networks=13.13.13.0/24 comment="Network ke R3"
 add area=backbone networks=1.1.1.0/24 comment="Network ke R-Cabang-1"
 ```
 
+### Firewall Configuration
+```bash
+/ip firewall filter
+add chain=forward dst-address=192.168.12.0/24 src-address=192.168.1.0/24 action=accept comment="Allow Cabang-1 to LAN Pusat (for VPN)"
+add chain=forward dst-address=192.168.12.0/24 src-address=192.168.2.0/24 action=drop comment="Block Cabang-2 direct access to LAN Pusat"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop
+add chain=forward action=accept
+```
+
 ---
 
 ## KONFIGURASI R2 (ROUTER OSPF CORE)
@@ -98,6 +108,24 @@ add area=backbone networks=23.23.23.0/24 comment="Network ke R3"
 add area=backbone networks=2.2.2.0/24 comment="Network ke R-Cabang-2"
 ```
 
+### Firewall Configuration
+```bash
+/ip firewall filter
+add chain=forward dst-address=192.168.12.0/24 src-address=192.168.2.0/24 action=drop comment="Block direct access to LAN Pusat"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop
+add chain=forward action=accept
+```
+
+### Firewall Filter Rules
+```bash
+/ip firewall filter
+add chain=forward dst-address=192.168.12.0/24 action=drop comment="Block direct access to LAN Pusat without VPN"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop
+add chain=forward action=accept comment="Allow all other forwarded traffic"
+```
+
 ---
 
 ## KONFIGURASI R3 (INTERNET GATEWAY + DNS SERVER)
@@ -120,7 +148,9 @@ add address=4.4.4.3/24 interface=ether4 comment="DNS Server Network"
 ### Internet Connection
 ```bash
 /ip dhcp-client
-add interface=ether5 disabled=no use-peer-dns=yes add-default-route=yes comment="Internet Connection"
+add interface=ether5 disabled=no use-peer-dns=yes comment="Internet Connection"
+
+# Hapus default route statis, biarkan DHCP client menambahkannya otomatis
 ```
 
 ### OSPF Configuration
@@ -140,7 +170,7 @@ add area=backbone networks=3.3.12.0/24 comment="Network ke R-Pusat"
 ### Default Route Distribution
 ```bash
 /routing ospf instance
-set default redistribute-connected=yes redistribute-static=yes redistribute-other-ospf=yes redistribute-rip=yes
+set default redistribute=connected,static,ospf,rip
 set default originate-default=always
 ```
 
@@ -170,16 +200,40 @@ add chain=input protocol=ospf action=accept
 add chain=forward protocol=ospf action=accept comment="Allow OSPF Forward"
 add chain=input dst-port=53 protocol=udp action=accept comment="DNS Access"
 add chain=input dst-port=53 protocol=tcp action=accept comment="DNS Access"
+add chain=input dst-port=80 protocol=tcp action=accept comment="Allow Web Access"
+add chain=forward dst-port=80 protocol=tcp action=accept comment="Allow Web Traffic Forward"
 add chain=forward connection-state=established,related action=accept
 add chain=forward connection-state=invalid action=drop 
 add chain=forward action=accept comment="Allow all forwarded traffic during testing"
 add chain=input action=drop
 ```
 
+### Port Forwarding di R3
+```bash
+/ip firewall nat
+add chain=dstnat dst-address=4.4.4.3 dst-port=80 protocol=tcp action=dst-nat to-addresses=192.168.12.10 to-ports=80 comment="Web Server via DNS Server"
+
+# Pastikan traffic dari PC-Public ke web server diizinkan
+/ip firewall filter
+add chain=forward src-address=4.4.4.0/24 dst-address=192.168.12.10 dst-port=80 protocol=tcp action=accept comment="Allow PC-Public to Web Server"
+```
+
 ### Default Route
 ```bash
-/ip route
-add dst-address=0.0.0.0/0 gateway=ether5 comment="Default Route to Internet via DHCP"
+# Jangan tambahkan default route manual, gunakan yang ditambahkan otomatis oleh DHCP client
+# Untuk melihat route yang ditambahkan:
+# /ip route print
+```
+
+### Pengujian DNS dari PC-Public
+```bash
+# Di PC-Public, jalankan:
+nslookup kantorpusat.co.id 4.4.4.3
+# Seharusnya menampilkan IP 4.4.4.3 dan/atau 3.3.12.13
+
+# Atau coba akses langsung via IP:
+curl http://4.4.4.3
+# Seharusnya menampilkan halaman web yang sama dengan http://kantorpusat.co.id
 ```
 
 ---
@@ -274,6 +328,15 @@ add name=backbone area-id=0.0.0.0 instance=default
 /routing ospf interface-template
 add area=backbone networks=2.2.2.0/24 comment="Network ke R2"
 add area=backbone networks=192.168.2.0/24 comment="LAN Cabang-2"
+```
+
+### Firewall Filter Rules
+```bash
+/ip firewall filter
+add chain=forward dst-address=192.168.12.0/24 action=drop comment="Block direct access to LAN Pusat without VPN"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop
+add chain=forward action=accept comment="Allow all other forwarded traffic"
 ```
 
 ### DHCP Server Configuration
@@ -382,17 +445,25 @@ add chain=srcnat src-address=192.168.100.0/24 action=masquerade comment="NAT VPN
 /ip firewall filter
 add chain=input connection-state=established,related action=accept
 add chain=input connection-state=invalid action=drop
+add chain=input protocol=icmp action=accept comment="Allow all ICMP/ping for testing"
+add chain=forward protocol=icmp action=accept comment="Allow ICMP in forward chain"
 add chain=input protocol=ospf action=accept comment="Allow OSPF"
 add chain=forward protocol=ospf action=accept comment="Allow OSPF in forward chain"
 add chain=input dst-port=1723 protocol=tcp action=accept comment="PPTP VPN"
 add chain=input protocol=gre action=accept comment="GRE for PPTP"
-add chain=input protocol=icmp action=accept comment="Allow all ICMP/ping temporarily for testing"
 add chain=input dst-port=80 protocol=tcp action=accept comment="Web Server Access"
 add chain=input dst-port=53 protocol=udp action=accept comment="Allow DNS access"
 add chain=input dst-port=53 protocol=tcp action=accept comment="Allow DNS access"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop
+add chain=forward dst-address=192.168.12.10 dst-port=80 protocol=tcp action=accept comment="Allow access to Web Server for all clients"
+add chain=forward dst-address=192.168.12.0/24 src-address=192.168.100.0/24 action=accept comment="Allow access to LAN Pusat from VPN clients"
+add chain=forward dst-address=192.168.12.0/24 src-address=!192.168.12.0/24 action=drop comment="Block direct access to LAN Pusat from non-VPN (except web server)"
+add chain=forward action=accept comment="Allow all other forwarded traffic during testing"
 add chain=input action=drop comment="Drop all other input"
 
-# Setelah pengujian selesai, aktifkan rule ICMP yang lebih terperinci ini:
+# Untuk pengujian 5 (setelah semua pengujian lain berhasil):
+# /ip firewall filter
 # add chain=input protocol=icmp src-address=192.168.1.0/24 action=accept comment="Allow ping from Cabang-1"
 # add chain=input protocol=icmp src-address=192.168.2.0/24 action=accept comment="Allow ping from Cabang-2"
 # add chain=input protocol=icmp src-address=4.4.4.0/24 action=drop comment="Block ping from Public"
@@ -419,6 +490,13 @@ set servers=4.4.4.3
 - **Gateway:** 192.168.2.12
 - **DNS:** 4.4.4.3
 - **PPTP VPN Client:** Connect to 3.3.12.13 (username: pc2user, password: pc2userpass)
+- **VPN Route Configuration:**
+  ```
+  # Konfigurasi di Windows setelah terhubung VPN
+  # Buka command prompt sebagai administrator
+  route add 192.168.12.0 mask 255.255.255.0 192.168.100.1 metric 1
+  # Atau aktifkan "Use default gateway on remote network" di Properties VPN Connection
+  ```
 
 ### Server (Web Server Pusat)
 - **IP Address:** 192.168.12.10/24
@@ -458,11 +536,27 @@ set servers=4.4.4.3
 ### 3. Pengujian Firewall DST-NAT → Akses Web Server via Domain
 **Test dari PC-Publik:**
 - Buka browser → http://kantorpusat.co.id
+- Alternatif: Buka browser → http://4.4.4.3
 
 **Test dari PC-1:**
 - Buka browser → http://kantorpusat.co.id
 
 **Expected Result:** Web server dapat diakses dari kedua lokasi
+
+**Catatan pengecekan akses dari PC-Public:**
+```bash
+# Verifikasi resolusi DNS di PC-Public
+nslookup kantorpusat.co.id 4.4.4.3
+
+# Verifikasi akses HTTP langsung ke IP
+curl -v http://4.4.4.3
+
+# Verifikasi akses HTTP ke domain
+curl -v http://kantorpusat.co.id
+
+# Jika masih bermasalah, cek port forwarding di R3
+/ip firewall nat print
+```
 
 ### 4. Pengujian PPTP VPN → Akses Web Langsung ke IP Server
 **Test dari PC-1 (via PPTP VPN Office-to-Office):**
@@ -472,7 +566,12 @@ set servers=4.4.4.3
 - Connect PPTP VPN terlebih dahulu
 - Buka browser → http://192.168.12.10
 
-**Expected Result:** Web server dapat diakses langsung via IP internal
+**Test tanpa VPN (harus gagal):**
+- Pada PC-2, disconnect VPN jika terhubung
+- Buka browser → http://192.168.12.10
+- Expected: Koneksi timeout/gagal karena akses langsung ke jaringan Pusat diblokir firewall
+
+**Expected Result untuk akses melalui VPN:** Web server dapat diakses langsung via IP internal
 
 ### 5. Pengujian Firewall Filter R-Pusat → Selective Ping Access
 **Test dari PC-1:**
