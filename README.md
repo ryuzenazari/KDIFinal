@@ -120,7 +120,7 @@ add address=4.4.4.3/24 interface=ether4 comment="DNS Server Network"
 ### Internet Connection
 ```bash
 /ip dhcp-client
-add interface=ether5 disabled=no comment="Internet Connection"
+add interface=ether5 disabled=no use-peer-dns=yes add-default-route=yes comment="Internet Connection"
 ```
 
 ### OSPF Configuration
@@ -140,7 +140,7 @@ add area=backbone networks=3.3.12.0/24 comment="Network ke R-Pusat"
 ### Default Route Distribution
 ```bash
 /routing ospf instance
-set default redistribute=connected,static,bgp,rip
+set default redistribute-connected=yes redistribute-static=yes redistribute-other-ospf=yes redistribute-rip=yes
 set default originate-default=always
 ```
 
@@ -157,8 +157,7 @@ add name=kantorpusat.co.id address=4.4.4.3 comment="Domain untuk akses dari PC-P
 ### NAT Configuration
 ```bash
 /ip firewall nat
-add chain=srcnat out-interface=ether5 action=masquerade comment="Internet NAT - Masquerade to Internet"
-add chain=srcnat dst-address=!192.168.0.0/16 action=masquerade comment="Masquerade all non-private traffic"
+add chain=srcnat out-interface=ether5 action=masquerade comment="Masquerade semua traffic keluar ke internet"
 ```
 
 ### Firewall Configuration
@@ -168,15 +167,19 @@ add chain=input connection-state=established,related action=accept
 add chain=input connection-state=invalid action=drop
 add chain=input protocol=icmp action=accept
 add chain=input protocol=ospf action=accept
+add chain=forward protocol=ospf action=accept comment="Allow OSPF Forward"
 add chain=input dst-port=53 protocol=udp action=accept comment="DNS Access"
 add chain=input dst-port=53 protocol=tcp action=accept comment="DNS Access"
+add chain=forward connection-state=established,related action=accept
+add chain=forward connection-state=invalid action=drop 
+add chain=forward action=accept comment="Allow all forwarded traffic during testing"
 add chain=input action=drop
 ```
 
 ### Default Route
 ```bash
 /ip route
-add dst-address=0.0.0.0/0 gateway=192.168.204.2 comment="Default Route to Internet"
+add dst-address=0.0.0.0/0 gateway=ether5 comment="Default Route to Internet via DHCP"
 ```
 
 ---
