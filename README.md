@@ -445,7 +445,10 @@ add chain=srcnat src-address=192.168.100.0/24 action=masquerade comment="NAT VPN
 /ip firewall filter
 add chain=input connection-state=established,related action=accept
 add chain=input connection-state=invalid action=drop
-add chain=input protocol=icmp action=accept comment="Allow all ICMP/ping for testing"
+add chain=input protocol=icmp src-address=192.168.1.0/24 action=accept comment="Allow ping from Cabang-1"
+add chain=input protocol=icmp src-address=192.168.2.0/24 action=accept comment="Allow ping from Cabang-2"
+add chain=input protocol=icmp src-address=4.4.4.0/24 action=drop comment="Block ping from Public"
+add chain=input protocol=icmp action=drop comment="Block other ping"
 add chain=forward protocol=icmp action=accept comment="Allow ICMP in forward chain"
 add chain=input protocol=ospf action=accept comment="Allow OSPF"
 add chain=forward protocol=ospf action=accept comment="Allow OSPF in forward chain"
@@ -461,13 +464,6 @@ add chain=forward dst-address=192.168.12.0/24 src-address=192.168.100.0/24 actio
 add chain=forward dst-address=192.168.12.0/24 src-address=!192.168.12.0/24 action=drop comment="Block direct access to LAN Pusat from non-VPN (except web server)"
 add chain=forward action=accept comment="Allow all other forwarded traffic during testing"
 add chain=input action=drop comment="Drop all other input"
-
-# Untuk pengujian 5 (setelah semua pengujian lain berhasil):
-# /ip firewall filter
-# add chain=input protocol=icmp src-address=192.168.1.0/24 action=accept comment="Allow ping from Cabang-1"
-# add chain=input protocol=icmp src-address=192.168.2.0/24 action=accept comment="Allow ping from Cabang-2"
-# add chain=input protocol=icmp src-address=4.4.4.0/24 action=drop comment="Block ping from Public"
-# add chain=input protocol=icmp action=drop comment="Block other ping"
 ```
 
 ### DNS Configuration
