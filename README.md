@@ -302,7 +302,7 @@ add name=pc2user password=pc2userpass profile=vpn-profile service=pptp comment="
 add chain=dstnat dst-address=3.3.12.13 dst-port=80 protocol=tcp action=dst-nat to-addresses=192.168.12.10 to-ports=80 comment="Web Server Port Forward"
 
 # Source NAT untuk semua outbound traffic
-add chain=srcnat src-address=192.168.12.0/24,192.168.100.0/24 out-interface=ether1 action=masquerade comment="NAT untuk LAN Pusat dan VPN Pool"
+add chain=srcnat src-address=192.168.12.0/255.255.255.0,192.168.100.0/255.255.255.0 out-interface=ether1 action=masquerade comment="NAT untuk LAN Pusat dan VPN Pool"
 ```
 
 ### Essential Firewall Rules - Streamlined
