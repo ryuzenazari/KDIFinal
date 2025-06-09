@@ -200,7 +200,8 @@ add chain=input connection-state=established,related action=accept
 add chain=input connection-state=invalid action=drop
 add chain=input protocol=icmp action=accept comment="Allow ICMP"
 add chain=input protocol=ospf action=accept comment="OSPF Protocol" 
-add chain=input dst-port=53 protocol=udp,tcp action=accept comment="DNS Services"
+add chain=input dst-port=53 protocol=tcp action=accept comment="DNS Services"
+add chain=input dst-port=53 protocol=udp action=accept comment="DNS Services"
 add chain=input action=drop comment="Drop all other input"
 ```
 
